@@ -1,14 +1,23 @@
 # Import socket module
-import socket 
-import sys # In order to terminate the program
-from time import time # For server deactivate conditions
+from random import randint
+import socket
+import struct
+import sys  # In order to terminate the program
+
 
 class Server:
+    byte_alignment = 4
+    entity = 2
+    timeout = 3 # seconds
+
     def __init__(self, serverHost, serverPort):
         # Assign a port number
         self.serverHost = serverHost
         self.serverPort = serverPort
-    
+
+    def set_port(self, serverPort):
+        self.serverPort = serverPort
+
     def bind_udp_server(self):
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # Bind the socket to server address and server port
@@ -17,66 +26,96 @@ class Server:
     def close_server(self):
         self.serverSocket.close()
 
-    def activate_udp_server(self):
+    def unpack_client_packet(self):
+        # unpack data from the client
+        packet, clientAddress = self.serverSocket.recvfrom(1024)
+        header = struct.unpack("IHH", packet[:8])
+        len_data = header[0]
+        code = header[1]
+        data = packet[8:8+len_data].decode()
+        print('From client {} : {}'.format(clientAddress[1], data))
+        return len_data, code, data, clientAddress
+
+    def unpack_client_ordered_packet(self):
+        # unpack data from client
+        packet, clientAddress = self.serverSocket.recvfrom(1024)
+        header = struct.unpack("IHH", packet[:8])
+        packet_id = struct.unpack("I", packet[8:12])[0]
+        len_data = header[0]
+        code = header[1]
+        data = packet[12:12+len_data-4].decode()
+        print('From client {} : {}'.format(clientAddress[1], data))
+        return len_data, code, data, clientAddress, packet_id
+
+    def send_ack_packet(self, len_data, code, clientAddress, pakcet_id):
+        # generate ack packet
+        ack_packet = struct.pack("IHHI", len_data, code, Server.entity, pakcet_id)
+        self.serverSocket.sendto(ack_packet, clientAddress)
+        return
+
+    def listen_udp_data(self, repeat):
         active = True
-        self.serverSocket.settimeout(3)
+        self.serverSocket.settimeout(Server.timeout)
+        i = 0
+        while i < repeat:
+            len_data, code, data, clientAddress, packet_id = self.unpack_client_ordered_packet()
+            self.send_ack_packet(len_data, code, clientAddress, packet_id)
+            i += 1
+        print('All packets recieved and acknowledged')
+        # generate response packet
+        tcp_port = randint(20000, 30000)
+        cobeB = randint(100, 400)
+        len_data = 4+2
+        response_packet = struct.pack("IHHIH", len_data, code, Server.entity, tcp_port, cobeB)
+        # send response packet
+        self.serverSocket.sendto(response_packet, clientAddress)
+        return tcp_port
+
+    def recieve_udp_data(self):
+        repeat = None
+        udp_port = None
+        active = True
+        self.serverSocket.settimeout(Server.timeout)
         while active:
             try:
-                message, clientAddress = self.serverSocket.recvfrom(1024)
-                capitalizedMessage = message.decode().upper()
-                self.serverSocket.sendto(capitalizedMessage.encode(), clientAddress)
-                print('From client {} : {}'.format(clientAddress[1], message.encode()))
+                len_data, code, data, clientAddress = self.unpack_client_packet()
+                # generate response packet
+                repeat = randint(5, 20)
+                udp_port = randint(20000, 30000)
+                lenA = randint(50, 100)
+                codeA = randint(100, 400)
+                len_data = 4+4+2+2
+                response_packet = struct.pack("IHHIIHH", len_data, code, Server.entity, repeat, udp_port, lenA, codeA)
+                # send response packet
+                self.serverSocket.sendto(response_packet, clientAddress)
+                active = False
             except socket.timeout as ex:
                 print(ex, ': no connections after 3 seconds')
                 self.close_server()
                 active = False
+        return repeat, udp_port
 
 
-    
 
-    # def await_client_connection(self):
-    #     # Set server no-packet timeout to 3 seconds
-    #     self.serverSocket.settimeout(60)
-    #     # Wait 60 seconds to allow clients to connect
-    #     self.serverSocket.listen(60)
-
-    #     while 1:
-    #         try:
-    #             connection, clientAddress = self.serverSocket.accept()
-    #             message = connection.recv(1024)
-    #             capitalizedMessage = message.decode().upper()
-    #             self.serverSocket.sendto(capitalizedMessage.encode(), clientAddress)
-    #         except socket.timeout as e:
-    #             print(e, ': no connections after 3 seconds')
-    #             self.close_socket_connection()
-    #             break
-    #         print('Client connected: ' + clientAddress[0] + ':' + clientAddress[1])
-
-
-    # def activate_client_to_server_connection(self):
-    #     active = True
-    #     condition = 'None provided'
-
-    #     print('Server is now active. Awaiting messages from clients.')
-    #     lastAction = time()
-    #     while active:
-    #         print(time(), lastAction, time() - lastAction)
-    #         if time() - lastAction > 3:
-    #             active = False
-    #             condition = 'The server did not receive any packet from the client for 3 seconds'
-    #         else:
-    #             message, clientAddress = self.serverSocket.recvfrom(1024)
-    #             capitalizedMessage = message.decode().upper()
-    #             self.serverSocket.sendto(capitalizedMessage.encode(), clientAddress)
-    #     print('Server has been deactived due to the following condition:\n{}'.format(condition))
-
-
+# Phase A - Receive client message via UDP Server
 
 server = Server('localhost', 12000)
 server.bind_udp_server()
 
-server.activate_udp_server()
+repeat, udp_port = server.recieve_udp_data()
+# udp_port is None if server timed out
+if udp_port is None:
+    sys.exit()
+
+# Phase B - Send receive repeat messages from client on new UDP Port
+
+server.set_port(udp_port)
+server.bind_udp_server()
+
+tcp_port = server.listen_udp_data(repeat)
+
+# Teardown
 
 server.close_server()
 
-sys.exit() #Terminate the program after sending the corresponding data
+sys.exit()  # Terminate the program when finished
