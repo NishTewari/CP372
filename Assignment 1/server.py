@@ -6,8 +6,8 @@ import sys  # In order to terminate the program
 
 
 class Server:
-    byte_alignment = 4
-    entity = 2
+    byte_alignment = 4 # adds empty bytes to the end of the packet to make it a multiple of 4
+    entity = 2 # client is always 1, server is always 2
     timeout = 3 # seconds
 
     def __init__(self, serverHost, serverPort):

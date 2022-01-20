@@ -5,15 +5,15 @@ import sys  # In order to terminate the program
 
 
 class Client:
-    byte_alignment = 4
-    entity = 1
+    byte_alignment = 4 # adds empty bytes to the end of the packet to make it a multiple of 4
+    entity = 1 # client is always 1, server is always 2
     timeout = 0.5 # seconds
 
-    def __init__(self, serverHost, serverPort):
+    def __init__(self, serverHost, serverPort, clientCode):
         self.serverHost = serverHost
         # Assign a port number
         self.serverPort = serverPort
-        self.code = 0
+        self.code = clientCode
     
     def set_port(self, serverPort):
         self.serverPort = serverPort
@@ -35,7 +35,7 @@ class Client:
         packet = header + data.encode('utf-8')
 
         # maintain divisible by 4 rule
-        while len(packet) % 4 > 0:
+        while len(packet) % Client.byte_alignment > 0:
             packet = packet + '0'.encode('utf-8')
 
         # send packet
@@ -55,11 +55,11 @@ class Client:
         # send packet repeat-many times
         for i in range(repeat):
             # generate packet
-            header = struct.pack("IHHI", len(message) + 4, self.code, Client.entity, i)
+            header = struct.pack("IHHI", len(data) + 4, self.code, Client.entity, i)
             packet = header + data.encode('utf-8')
 
             # maintain divisible by 4 rule
-            while len(packet) % 4 > 0:
+            while len(packet) % Client.byte_alignment > 0:
                 packet = packet + '0'.encode('utf-8')
 
             # send packet until acknowledged
@@ -88,7 +88,7 @@ class Client:
 
 # Phase A - Send message via UDP Server
 
-client = Client('localhost', 12000)
+client = Client('localhost', 12000, 0)
 
 client.connect_udp_client()
 
@@ -102,7 +102,7 @@ client.set_code(codeA)
 client.set_port(udp_port)
 client.connect_udp_client()
 
-tcp_port, codeB = client.send_repeat_data(repeat, '0000')
+tcp_port, codeB = client.send_repeat_data(repeat, '0' * lenA)
 print('From server: ', tcp_port, codeB)
 
 # Teardown
