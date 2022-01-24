@@ -1,7 +1,7 @@
-# Import socket module
+# Imports
 import socket
 import struct
-import sys  # In order to terminate the program
+import sys
 
 
 class Client:
@@ -29,14 +29,16 @@ class Client:
     def close_client(self):
         self.clientSocket.close()
 
+    # For Phase A - sends a single packet to the server
     def send_data(self, data):
-        # generate packet
-        header = struct.pack("IHH", len(data), self.code, Client.entity)
-        packet = header + data.encode('utf-8')
-
         # maintain divisible by 4 rule
-        while len(packet) % Client.byte_alignment > 0:
-            packet = packet + '0'.encode('utf-8')
+        if len(data) % 4 > 0:
+            data = data + bytearray(4 - len(data) % 4)
+        data_len = len(data)
+
+        # generate packet
+        header = struct.pack("IHH", data_len, self.code, Client.entity)
+        packet = header + data.encode('utf-8')
 
         # send packet
         self.clientSocket.sendto(packet, (self.serverHost, self.serverPort))
@@ -44,23 +46,21 @@ class Client:
 
         # unpack and return response from server
         header = struct.unpack("IHH", response_packet[:8])
-        data = struct.unpack("IIHH", response_packet[8:20])
-        repeat = data[0]
-        udp_port = data[1]
-        lenA = data[2]
-        codeA = data[3]
+        repeat, udp_port, lenA, codeA = struct.unpack("IIHH", response_packet[8:20])
         return repeat, udp_port, lenA, codeA
 
+    # For Phase B - sends multiple packets to the server
     def send_repeat_data(self, repeat, data):
         # send packet repeat-many times
         for i in range(repeat):
-            # generate packet
-            header = struct.pack("IHHI", len(data) + 4, self.code, Client.entity, i)
-            packet = header + data.encode('utf-8')
-
             # maintain divisible by 4 rule
-            while len(packet) % Client.byte_alignment > 0:
-                packet = packet + '0'.encode('utf-8')
+            if len(data) % 4 > 0:
+                data = data + bytearray(4 - len(data) % 4)
+            data_len = 4 + len(data)
+
+            # generate packet
+            header = struct.pack("IHHI", data_len, self.code, Client.entity, i)
+            packet = header + data.encode('utf-8')
 
             # send packet until acknowledged
             acknowledged = False
@@ -79,9 +79,7 @@ class Client:
                     pass
         print('All packets sent and acknowledged')
         response_packet, serverAddress = self.clientSocket.recvfrom(2048)
-        data = struct.unpack("IH", response_packet[8:14])
-        tcp_port = data[0]
-        cobeB = data[1]
+        tcp_port, cobeB = struct.unpack("IH", response_packet[8:14])
         return tcp_port, cobeB
 
 

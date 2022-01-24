@@ -1,8 +1,8 @@
-# Import socket module
+# Imports
 from random import randint
 import socket
 import struct
-import sys  # In order to terminate the program
+import sys
 
 
 class Server:
@@ -29,9 +29,7 @@ class Server:
     def unpack_client_packet(self):
         # unpack data from the client
         packet, clientAddress = self.serverSocket.recvfrom(1024)
-        header = struct.unpack("IHH", packet[:8])
-        len_data = header[0]
-        code = header[1]
+        len_data, code = struct.unpack("IHH", packet[:8])
         data = packet[8:8+len_data].decode()
         print('From client {} : {}'.format(clientAddress[1], data))
         return len_data, code, data, clientAddress
@@ -39,38 +37,19 @@ class Server:
     def unpack_client_ordered_packet(self):
         # unpack data from client
         packet, clientAddress = self.serverSocket.recvfrom(1024)
-        header = struct.unpack("IHH", packet[:8])
+        len_data, code = struct.unpack("IHH", packet[:8])
         packet_id = struct.unpack("I", packet[8:12])[0]
-        len_data = header[0]
-        code = header[1]
         data = packet[12:12+len_data-4].decode()
         print('From client {} : {}'.format(clientAddress[1], data))
         return len_data, code, data, clientAddress, packet_id
 
-    def send_ack_packet(self, len_data, code, clientAddress, pakcet_id):
+    def send_ack_packet(self, len_data, code, clientAddress, packet_id):
         # generate ack packet
-        ack_packet = struct.pack("IHHI", len_data, code, Server.entity, pakcet_id)
+        ack_packet = struct.pack("IHHI", len_data, code, Server.entity, packet_id)
         self.serverSocket.sendto(ack_packet, clientAddress)
         return
 
-    def listen_udp_data(self, repeat):
-        active = True
-        self.serverSocket.settimeout(Server.timeout)
-        i = 0
-        while i < repeat:
-            len_data, code, data, clientAddress, packet_id = self.unpack_client_ordered_packet()
-            self.send_ack_packet(len_data, code, clientAddress, packet_id)
-            i += 1
-        print('All packets recieved and acknowledged')
-        # generate response packet
-        tcp_port = randint(20000, 30000)
-        cobeB = randint(100, 400)
-        len_data = 4+2
-        response_packet = struct.pack("IHHIH", len_data, code, Server.entity, tcp_port, cobeB)
-        # send response packet
-        self.serverSocket.sendto(response_packet, clientAddress)
-        return tcp_port
-
+    # For Phase A - Recieve single client packet
     def recieve_udp_data(self):
         repeat = None
         udp_port = None
@@ -94,6 +73,25 @@ class Server:
                 self.close_server()
                 active = False
         return repeat, udp_port
+
+    # For Phase B - Recieve repeat client packets and send ack packet each time
+    def listen_udp_data(self, repeat):
+        active = True
+        self.serverSocket.settimeout(Server.timeout)
+        i = 0
+        while i < repeat:
+            len_data, code, data, clientAddress, packet_id = self.unpack_client_ordered_packet()
+            self.send_ack_packet(len_data, code, clientAddress, packet_id)
+            i += 1
+        print('All packets recieved and acknowledged')
+        # generate response packet
+        tcp_port = randint(20000, 30000)
+        cobeB = randint(100, 400)
+        len_data = 4+2
+        response_packet = struct.pack("IHHIH", len_data, code, Server.entity, tcp_port, cobeB)
+        # send response packet
+        self.serverSocket.sendto(response_packet, clientAddress)
+        return tcp_port
 
 
 
