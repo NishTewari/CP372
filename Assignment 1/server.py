@@ -4,17 +4,21 @@ import socket
 import struct
 import sys
 
+# Constants
+SERVER_HOST = 'localhost' # 'localhost' or '34.69.60.253'
+SERVER_PORT = 12000
+
 
 class Server:
     byte_alignment = 4 # adds empty bytes to the end of the packet to make it a multiple of 4
     entity = 2 # client is always 1, server is always 2
     timeout = 3 # seconds
 
-    def __init__(self, serverHost, serverPort):
+    def __init__(self, serverHost, serverPort, code = 0):
         self.serverHost = serverHost
         # Assign a port number
         self.serverPort = serverPort
-        self.code = 0
+        self.code = code
 
     def set_port(self, serverPort):
         self.serverPort = serverPort
@@ -29,6 +33,8 @@ class Server:
 
     def bind_tcp_server(self):
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Allow reuse of the socket address without TIME_WAIT
+        self.serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         # Bind the socket to server address and server port
         self.serverSocket.bind((self.serverHost, self.serverPort))
 
@@ -37,7 +43,7 @@ class Server:
 
     def check_protocol_deviation(self, attr_name, true_value, expected_value):
         if expected_value != true_value:
-            print("\nProtocol deviation detected:\n'{}': received {}, expected {}".format(attr_name, expected_value, true_value))
+            print("\nProtocol deviation detected:\n'{}': received {}, expected {}".format(attr_name, true_value, expected_value))
             print("\nQuitting program...")
             self.close_server()
             sys.exit()
@@ -52,23 +58,24 @@ class Server:
     def unpack_client_packet(self):
         # unpack data from the client
         packet, clientAddress = self.serverSocket.recvfrom(1024)
-        data_len, code, entity = struct.unpack("IHH", packet[:8])
+        data_len, code, entity = struct.unpack("!IHH", packet[:8])
         data = packet[8:8+data_len].decode()
-        print('From client {} : {}'.format(clientAddress[1], data))
+        print(f'Receiving from the client: data_length: {data_len}  code: {code}  entity: {entity} data: {data}')
         return data_len, code, entity, data, clientAddress
 
     def unpack_client_ordered_packet(self):
         # unpack data from client
         packet, clientAddress = self.serverSocket.recvfrom(1024)
-        data_len, code, entity = struct.unpack("IHH", packet[:8])
-        packet_id = struct.unpack("I", packet[8:12])[0]
+        data_len, code, entity = struct.unpack("!IHH", packet[:8])
+        packet_id = struct.unpack("!I", packet[8:12])[0]
         data = packet[12:12+data_len-4].decode()
-        print('From client {} : {}'.format(clientAddress[1], data))
+        print(f'received_packet_id =  {packet_id} data_len =  {data_len}  pcode: {code}')
         return data_len, code, entity, data, clientAddress, packet_id
 
-    def send_ack_packet(self, data_len, code, clientAddress, packet_id):
+    def send_ack_packet(self, clientAddress, packet_id):
         # generate ack packet
-        ack_packet = struct.pack("IHHI", data_len, code, Server.entity, packet_id)
+        data_len = 4
+        ack_packet = struct.pack("!IHHI", data_len, self.code, Server.entity, packet_id)
         self.serverSocket.sendto(ack_packet, clientAddress)
         return
 
@@ -90,8 +97,9 @@ class Server:
                 udp_port = randint(20000, 30000)
                 lenA = randint(50, 100)
                 codeA = randint(100, 400)
-                response_packet = struct.pack("IHHIIHH", data_len, self.code, Server.entity, repeat, udp_port, lenA, codeA)
+                response_packet = struct.pack("!IHHIIHH", data_len, self.code, Server.entity, repeat, udp_port, lenA, codeA)
                 # send response packet
+                print(f'\nSending to the client: data_length: {data_len}  code: {self.code}  entity: {Server.entity}  repeat: {repeat}  udp_port: {udp_port}  len: {lenA}  codeA: {codeA}')
                 self.serverSocket.sendto(response_packet, clientAddress)
                 active = False
             except socket.timeout as ex:
@@ -108,54 +116,62 @@ class Server:
             data_len, code, entity, data, clientAddress, packet_id = self.unpack_client_ordered_packet()
             # check for protocol deviations
             self.check_default_deviations(data_len-4, data, code, entity)
-            self.send_ack_packet(data_len, self.code, clientAddress, packet_id)
+            self.send_ack_packet(clientAddress, packet_id)
             i = packet_id+1
-        print('All packets received and acknowledged')
         # generate response packet
-        data_len = 4+2
+        data_len = 4+4
         tcp_port = randint(20000, 30000)
         codeB = randint(100, 400)
-        response_packet = struct.pack("IHHIH", data_len, self.code, Server.entity, tcp_port, codeB)
+        response_packet = struct.pack("!IHHII", data_len, self.code, Server.entity, tcp_port, codeB)
+        print(f' ------------- B2: sending tcp_port {tcp_port} codeB {codeB}')
         # send response packet
         self.serverSocket.sendto(response_packet, clientAddress)
         return tcp_port, codeB
 
     # For Phase C - Send single packet to client using TCP
     def send_tcp_data(self):
-        self.serverSocket.listen(20)
+        self.serverSocket.listen(Server.timeout)
         # TODO: multi-threaded clients - simply send the packet on a new thread and return there instead of here
         # await a client connection
         active = True
         while active:
             connection, clientAddress = self.serverSocket.accept()
-            print('Connected to client {}'.format(clientAddress[1]))
+            print(f'SERVER: Connected to client {clientAddress[1]}')
             # send data to client
             data_len = 4+2+2+1
             repeat = randint(5, 20)
             lenC = randint(50, 100)
             codeC = randint(100, 400)
-            char = 'A'
-            packet = struct.pack("IHHIHHB", data_len, self.code, Server.entity, repeat, lenC, codeC, ord(char))
+            char = randint(65, 90) # A - 65, Z - 90
+            packet = struct.pack("!IHHIHHB", data_len, self.code, Server.entity, repeat, lenC, codeC, char)
+            print(f'Sending to the client: data_length: {data_len}  code: {self.code}  entity: {Server.entity}  repeat2: {repeat}  len2: {lenC}  codeC: {codeC}')
             connection.sendall(packet)
-            return connection, clientAddress, repeat, lenC * char, codeC
+            return connection, clientAddress, repeat, lenC * char, codeC, lenC
 
     # For Phase D - Receive repeat client packets using TCP
-    def listen_tcp_data(self, connection, clientAddress, repeat, expected_data):
-        # receive data from client
+    def listen_tcp_data(self, connection, clientAddress, repeat, lenC):
+        self.serverSocket.settimeout(Server.timeout)
+        print('SERVER: Starting to receive packets from client')
+        active = True
         i = 0
-        while i < repeat:
-            data = connection.recv(1024)
-            data_len, code, entity = struct.unpack("IHH", data[:8])
-            data = data[8:8+data_len].decode()
-            # check for protocol deviations
-            self.check_default_deviations(data_len, data, code, entity)
-            print('From client {} : {}'.format(clientAddress[1], data))
-            i += 1
-        print('All packets received')
+        data_list = []
+        # receive data from client
+        try:
+            while active and i < repeat:
+                # unpack packets
+                packet = connection.recv(8 + lenC + (4 - lenC % 4))
+                data_len, code, entity = struct.unpack("!IHH", packet[:8])
+                data = packet[8:8+data_len].decode()
+                # check for protocol deviations
+                self.check_default_deviations(data_len, data, code, entity)
+                print(f'i =  {i} data_len:  {data_len}  pcode: {code} entity: {entity} data:  {data}')
+                i += 1
+        except socket.timeout as ex:
+            print(ex, ': no connections after 3 seconds')
         # generate response packet
         data_len = 2+2
         codeD = randint(100, 400)
-        response_packet = struct.pack("IHHI", data_len, self.code, Server.entity, codeD)
+        response_packet = struct.pack("!IHHI", data_len, self.code, Server.entity, codeD)
         # send response packet
         connection.sendall(response_packet)
         return codeD
@@ -165,8 +181,9 @@ class Server:
 def main():
 
     # Phase A - Receive client message via UDP Server
+    print('\n------------ Starting Phase A ------------\n')
 
-    server = Server('localhost', 12000)
+    server = Server(SERVER_HOST, SERVER_PORT)
     server.bind_udp_server()
 
     repeat, udp_port, codeA = server.receive_udp_data()
@@ -175,31 +192,47 @@ def main():
         print("Quitting program...")
         sys.exit()
 
+    print('\n------------  End of Phase A  ------------\n')
+
+
     # Phase B - Receive repeat messages from client on new UDP Port
+    print('\n------------ Starting Phase B ------------\n')
 
     server.set_port(udp_port)
     server.set_code(codeA)
     server.bind_udp_server()
+    print(f'SERVER: Server ready on the new UDP port: {udp_port}')
 
     tcp_port, codeB = server.listen_udp_data(repeat)
 
+    print('\n------------  End of Phase B  ------------\n')
+
+
     # Phase C - Send client a message via TCP Server
+    print('\n------------ Starting Phase C ------------\n')
 
     server.set_port(tcp_port)
     server.set_code(codeB)
     server.bind_tcp_server()
+    print(f'SERVER: Server ready on the TCP port: {tcp_port}')
 
-    connection, clientAddress, repeat, data, codeC = server.send_tcp_data()
+    connection, clientAddress, repeat, data, codeC, lenC = server.send_tcp_data()
+    
+    print('\n------------  End of Phase C  ------------\n')
+
 
     # Phase D - Receive repeat messages from client via TCP Server
+    print('\n------------ Starting Phase D ------------\n')
 
     server.set_code(codeC)
-    codeD = server.listen_tcp_data(connection, clientAddress, repeat, data)
+    codeD = server.listen_tcp_data(connection, clientAddress, repeat, lenC)
+
+    print('\n------------  End of Phase D  ------------\n')
+
 
     # Teardown
 
     server.close_server()
-
     sys.exit()  # Terminate the program when finished
 
 # Run program if the file is being run directly

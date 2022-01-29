@@ -4,17 +4,21 @@ import struct
 import sys
 import time
 
+# Constants
+SERVER_HOST = 'localhost' # 'localhost' or '34.69.60.253'
+SERVER_PORT = 12000
+
 
 class Client:
     byte_alignment = 4 # adds empty bytes to the end of the packet to make it a multiple of 4
     entity = 1 # client is always 1, server is always 2
     timeout = 0.5 # seconds
 
-    def __init__(self, serverHost, serverPort, clientCode):
+    def __init__(self, serverHost, serverPort, code = 0):
         self.serverHost = serverHost
         # Assign a port number
         self.serverPort = serverPort
-        self.code = clientCode
+        self.code = code
     
     def set_port(self, serverPort):
         self.serverPort = serverPort
@@ -39,11 +43,11 @@ class Client:
     def send_udp_data(self, data):
         # maintain divisible by 4 rule
         if len(data) % 4 > 0:
-            data = data + '0' * (4 - len(data) % 4)
+            data = data + '\0' * (4 - len(data) % 4)
         data_len = len(data)
 
         # generate packet
-        header = struct.pack("IHH", data_len, self.code, Client.entity)
+        header = struct.pack("!IHH", data_len, self.code, Client.entity)
         packet = header + data.encode('utf-8')
 
         # send packet
@@ -51,22 +55,24 @@ class Client:
         response_packet, serverAddress = self.clientSocket.recvfrom(2048)
 
         # unpack and return response from server
-        header = struct.unpack("IHH", response_packet[:8])
-        repeat, udp_port, lenA, codeA = struct.unpack("IIHH", response_packet[8:20])
+        data_len, code, entity = struct.unpack("!IHH", response_packet[:8])
+        repeat, udp_port, lenA, codeA = struct.unpack("!IIHH", response_packet[8:20])
+        print(f'Received packet from server: data_len: {data_len}  pcode: {code}  entity: {entity}  repeat: {repeat}  len: {lenA}  udp_port: {udp_port}  codeA: {codeA}')
         return repeat, udp_port, lenA, codeA
 
     # For Phase B - sends multiple packets to UDP server
     def send_repeat_udp_data(self, repeat, data):
         self.clientSocket.settimeout(Client.timeout)
-        # maintain divisible by 4 rule
-        if len(data) % 4 > 0:
-            data = data + '0' * (4 - len(data) % 4)
-        data_len = 4 + len(data)
+        time.sleep(Client.timeout) # give server time to start listening
         # send packet repeat-many times
         for i in range(repeat):
+            # maintain divisible by 4 rule
+            if len(data) % 4 > 0:
+                data = data + '\0' * (4 - len(data) % 4)
+            data_len = 4 + len(data)
 
             # generate packet
-            header = struct.pack("IHHI", data_len, self.code, Client.entity, i)
+            header = struct.pack("!IHHI", data_len, self.code, Client.entity, i)
             packet = header + data.encode('utf-8')
 
             # send packet until acknowledged
@@ -75,18 +81,18 @@ class Client:
                 try:
                     self.clientSocket.sendto(packet, (self.serverHost, self.serverPort))
                     ack_packet, serverAddress = self.clientSocket.recvfrom(2048)
-                    ack_header = struct.unpack("IHH", ack_packet[:8])
-                    ack_data = struct.unpack("I", ack_packet[8:12])
-                    ack_packet_id = ack_data[0]
-                    acknowledged = ack_packet_id == i
-                    if not acknowledged:
-                        print('Server acknowledged packet {} instead of {}'.format(ack_packet_id, i))
-                except socket.timeout as ex:
-                    print("{} : Did not receive ack from server, sending packet {} again".format(ex, i))
-                    pass
-        print('All packets sent and acknowledged')
+                    data_len, code, entity, ack_packet_id = struct.unpack("!IHHI", ack_packet[:12])
+                    acknowledged = True # ack_packet_id == i
+                    if acknowledged:
+                        print(f'Received acknowledgement packet from server: data_len:  {data_len} pcode:  {code} entity:  {entity} acknumber:  {ack_packet_id}')
+                    else:
+                        print(f'Server acknowledged packet {ack_packet_id} instead of {i}')
+                except socket.timeout:
+                    print("CLIENT: Did not receive ack from server, sending packet {} again".format(i))
+        # unpack server response
         response_packet, serverAddress = self.clientSocket.recvfrom(2048)
-        tcp_port, codeB = struct.unpack("IH", response_packet[8:14])
+        data_len, code, entity, tcp_port, codeB = struct.unpack("!IHHII", response_packet)
+        print(f'Received final packet: data_len:  {data_len} pcode:  {code} entity: {entity}  tcp_port: {tcp_port}  codeB: {codeB}')
         return tcp_port, codeB
 
     # For Phase C - connect to TCP server and receive a packet
@@ -94,31 +100,27 @@ class Client:
         # receive packet
         response_packet, serverAddress = self.clientSocket.recvfrom(2048)
         # unpack and return response from server
-        header = struct.unpack("IHH", response_packet[:8])
-        repeat, lenC, codeC, ord_char = struct.unpack("IHHB", response_packet[8:17])
+        data_len, code, entity = struct.unpack("!IHH", response_packet[:8])
+        repeat, lenC, codeC, ord_char = struct.unpack("!IHHB", response_packet[8:17])
         char = chr(ord_char)
+        print(f'Received packet from server: data_len: {data_len}  pcode: {code}   entity: {entity}   repeat2: {repeat}   len2: {lenC}   codeC: {codeC}   char:  {char}')
         return repeat, lenC, codeC, char
 
     # For Phase D - send repeat messages to TCP server
-    def send_repeat_tcp_data(self, repeat, data):
-        # TODO: CONFIRM THIS IS REQUIRED HERE
+    def send_repeat_tcp_data(self, repeat, char, lenC):
         # maintain divisible by 4 rule
-        if len(data) % 4 > 0:
-            data = data + '0' * (4 - len(data) % 4)
+        data = char * (lenC + (4 - lenC % 4))
         data_len = len(data)
         # generate packet
-        header = struct.pack("IHH", data_len, self.code, Client.entity)
+        header = struct.pack("!IHH", data_len, self.code, Client.entity)
         packet = header + data.encode('utf-8')
+        print(f'Sending {data} to server {repeat} times')
         # send packet repeat-many times
-        for i in range(repeat):
-            # TODO: Confirm acknowledgement is NOT required here
-            # send packet until acknowledged
+        for _ in range(repeat):
             self.clientSocket.sendall(packet)
-            time.sleep(0.05) # TODO: Does this make more sense than ack?
-        print('All packets sent')
-        response_packet = self.clientSocket.recv(2048)
-        header = struct.unpack("H", response_packet[8:10])
-        codeD = header[0]
+        response_packet = self.clientSocket.recv(1024)
+        data_len, code, entity, codeD = struct.unpack("!IHHI", response_packet[:12])
+        print(f'Received from server: data_len: {data_len}  pcode: {code}  entity: {entity}  codeD: {codeD}')
         return codeD
 
 
@@ -126,45 +128,61 @@ class Client:
 def main():
 
     # Phase A - Send message via UDP Server
+    print('\n------------ Starting Phase A ------------\n')
 
-    client = Client('localhost', 12000, 0)
+    client = Client(SERVER_HOST, SERVER_PORT)
 
     client.connect_udp_client()
 
     message = "Hello World!!!"
     repeat, udp_port, lenA, codeA = client.send_udp_data(message)
-    print('From server: ', repeat, udp_port, lenA, codeA)
+
+    print('\n------------  End of Phase A  ------------\n')
+
 
     # Phase B - Send repeat messages to new UDP Port
+    print('\n------------ Starting Phase B ------------\n')
 
     client.set_code(codeA)
     client.set_port(udp_port)
     client.connect_udp_client()
+    print(f'CLIENT: Client ready on the new UDP port: {udp_port}')
+
+    time.sleep(Client.timeout) # give server time to switch ports
 
     tcp_port, codeB = client.send_repeat_udp_data(repeat, '0' * lenA)
-    print('From server: ', tcp_port, codeB)
+
+    print('\n------------  End of Phase B  ------------\n')
+
 
     # Phase C - Connect to TCP Server and receive message
+    print('\n------------ Starting Phase C ------------\n')
 
     client.set_code(codeB)
     client.set_port(tcp_port)
     client.connect_tcp_client()
+    print(f'CLIENT: Client ready on the TCP port: {tcp_port}')
 
-    time.sleep(2) # give server time to start listening
+    time.sleep(Client.timeout) # give server time to start listening
 
     repeat, lenC, codeC, char = client.receive_tcp_data()
 
+    print('\n------------  End of Phase C  ------------\n')
+
+
     # Phase D - Send repeat messages to TCP Port
+    print('\n------------ Starting Phase D ------------\n')
 
     client.set_code(codeC)
 
-    codeD = client.send_repeat_tcp_data(repeat, char * lenC)
-    print('From server: ', codeD)
+    codeD = client.send_repeat_tcp_data(repeat, char, lenC)
+
+    print('\n------------  End of Phase D  ------------\n')
+
 
     # Teardown
 
     client.close_client()
-
     sys.exit()  # Terminate the program when finished
 
 # Run program if the file is being run directly
