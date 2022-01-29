@@ -1,3 +1,28 @@
+"""
+    ~~~~~~~~~
+    SERVER.PY
+    ~~~~~~~~~
+
+    UDP and TCP Networking
+    CP 372 -> Assignment 1
+    
+    @author Kelvin Kellner (190668940) - https://github.com/kelvinkellner
+    @author Nishant Tewari (190684430) - https://github.com/XSilviaX
+
+    @see https://github.com/XSilviaX/CP372
+    ---------------------------------------------------------------------
+    Files:
+        client.py
+        server.py
+    ---------------------------------------------------------------------
+    Program runs through 4 phases:
+        Phase A: sending a single packet using UDP
+        Phase B: sending multiple packets using UDP
+        Phase C: connecting to TCP server and receiving a packet
+        Phase D: sending multiple packets using TCP
+    ---------------------------------------------------------------------
+"""
+
 # Imports
 from random import randint
 import socket
