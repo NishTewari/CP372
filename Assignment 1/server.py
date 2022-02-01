@@ -3,6 +3,13 @@
     SERVER.PY
     ~~~~~~~~~
 
+    Multi-process server, waits for a client to connect on Port 12000.
+    When client connects and finishes Phase A, the client and server
+    switch ports and begin Phase B on a new Thread. A new server is
+    created back on Port 12000 and waits for a client to connect.
+
+    ---------------------------------------------------------------------
+    
     UDP and TCP Networking
     CP 372 -> Assignment 1
     
@@ -28,6 +35,8 @@ from random import randint
 import socket
 import struct
 import sys
+import threading
+import time
 
 # Constants
 SERVER_HOST = 'localhost' # 'localhost' or '34.69.60.253'
@@ -38,6 +47,7 @@ class Server:
     byte_alignment = 4 # adds empty bytes to the end of the packet to make it a multiple of 4
     entity = 2 # client is always 1, server is always 2
     timeout = 3 # seconds
+    multiprocess_timeout = 30 # seconds
 
     def __init__(self, serverHost, serverPort, code = 0):
         self.serverHost = serverHost
@@ -128,8 +138,7 @@ class Server:
                 self.serverSocket.sendto(response_packet, clientAddress)
                 active = False
             except socket.timeout as ex:
-                print(ex, ': no connections after 3 seconds')
-                self.close_server()
+                # print('\nSERVER:', ex, ': no connections after 3 seconds')
                 active = False
         return repeat, udp_port, codeA
 
@@ -203,30 +212,59 @@ class Server:
 
 
 
-def main():
+def start():
 
-    # Phase A - Receive client message via UDP Server
-    print('\n------------ Starting Phase A ------------\n')
+    threads = []
 
-    server = Server(SERVER_HOST, SERVER_PORT)
-    server.bind_udp_server()
+    print(f'\n----------\nSERVER: Multi-process server started.\n----------')
 
-    repeat, udp_port, codeA = server.receive_udp_data()
-    # udp_port is None if server timed out
-    if udp_port is None:
-        print("Quitting program...")
-        sys.exit()
+    attempt = 0
+    while attempt < (Server.multiprocess_timeout / Server.timeout):
+        
+        # Phase A - Receive client message via UDP Server
+        if attempt == 0:
+            print('\n------------ Starting Phase A ------------\n')
 
-    print('\n------------  End of Phase A  ------------\n')
+        server = Server(SERVER_HOST, SERVER_PORT)
+        server.bind_udp_server()
 
+        repeat, udp_port, codeA = server.receive_udp_data()
+        # udp_port is None if server timed out
+        if udp_port is None:
+            if attempt == 0:
+                print(f"Waiting up to {Server.timeout} seconds for a new client to connect...")
+            attempt += 1
+            server.close_server()
+            # print(f"Giving another chance for a new client to connect (attempt {attempt}/10)...")
+        else:
+            attempt = 0 # reset attempt counter
+            print('\n------------  End of Phase A  ------------\n')
 
-    # Phase B - Receive repeat messages from client on new UDP Port
-    print('\n------------ Starting Phase B ------------\n')
+            # Phase B - Receive repeat messages from client on new UDP Port
+            print('\n------------ Starting Phase B ------------\n')
 
-    server.set_port(udp_port)
-    server.set_code(codeA)
-    server.bind_udp_server()
-    print(f'SERVER: Server ready on the new UDP port: {udp_port}')
+            server.set_port(udp_port)
+            server.set_code(codeA)
+            server.bind_udp_server()
+            print(f'SERVER: Server ready on the new UDP port: {udp_port}')
+            
+            # Create a new thread now that we have moved to a new port,
+            # allowing an additional client to join on Port 12000.
+            thread = threading.Thread(target=next, args=(server, repeat))
+            threads.append(thread)
+            print("\n-----\nSERVER: Client successfully connected. Moving to next section on new thread.")
+            print("SERVER: Feel free to connect another client to test multi-processing if you wish.\n-----\n")
+            # Start the thread and finish Phase B
+            thread.start()
+    
+    print("\nSERVER: Maximum new-client attempts reached. No new threads will be created.\n\tThe program will stop when all clients are finished.")
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+    # Kill the program
+    sys.exit()
+
+def next(server, repeat):
 
     tcp_port, codeB = server.listen_udp_data(repeat)
 
@@ -262,4 +300,4 @@ def main():
 
 # Run program if the file is being run directly
 if __name__ == "__main__":
-    main()
+    start()

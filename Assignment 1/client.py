@@ -2,7 +2,13 @@
     ~~~~~~~~~
     CLIENT.PY
     ~~~~~~~~~
+    
+    A client that connects to a server and runs through the 4 phases.
+    Run this program multiple times on different consoles and the server
+    will accept all users and run them on separate threads.
 
+    ---------------------------------------------------------------------
+    
     UDP and TCP Networking
     CP 372 -> Assignment 1
     
