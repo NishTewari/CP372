@@ -39,7 +39,7 @@ import threading
 import time
 
 # Constants
-SERVER_HOST = 'localhost' # 'localhost' or '34.69.60.253'
+SERVER_HOST = 'localhost' # 'localhost'
 SERVER_PORT = 12000
 
 
@@ -95,6 +95,8 @@ class Server:
         packet, clientAddress = self.serverSocket.recvfrom(1024)
         data_len, code, entity = struct.unpack("!IHH", packet[:8])
         data = packet[8:8+data_len].decode()
+        # Lame spot for this print line, but it's the only way I can get the result I expect!
+        print('\n------------ Starting Phase A ------------\n')
         print(f'Receiving from the client: data_length: {data_len}  code: {code}  entity: {entity} data: {data}')
         return data_len, code, entity, data, clientAddress
 
@@ -222,8 +224,6 @@ def start():
     while attempt < (Server.multiprocess_timeout / Server.timeout):
         
         # Phase A - Receive client message via UDP Server
-        if attempt == 0:
-            print('\n------------ Starting Phase A ------------\n')
 
         server = Server(SERVER_HOST, SERVER_PORT)
         server.bind_udp_server()
@@ -232,13 +232,12 @@ def start():
         # udp_port is None if server timed out
         if udp_port is None:
             if attempt == 0:
-                print(f"Waiting up to {Server.timeout} seconds for a new client to connect...")
+                print(f"\n----------\nWaiting up to {Server.multiprocess_timeout} seconds for a new client to connect...\n----------")
             attempt += 1
             server.close_server()
             # print(f"Giving another chance for a new client to connect (attempt {attempt}/10)...")
         else:
             attempt = 0 # reset attempt counter
-            print('\n------------  End of Phase A  ------------\n')
 
             # Phase B - Receive repeat messages from client on new UDP Port
             print('\n------------ Starting Phase B ------------\n')
@@ -252,12 +251,12 @@ def start():
             # allowing an additional client to join on Port 12000.
             thread = threading.Thread(target=next, args=(server, repeat))
             threads.append(thread)
-            print("\n-----\nSERVER: Client successfully connected. Moving to next section on new thread.")
-            print("SERVER: Feel free to connect another client to test multi-processing if you wish.\n-----\n")
+            print("\n----------\nSERVER: Client successfully connected. Moving to next section on new thread.")
+            print("SERVER: Feel free to connect another client to test multi-processing if you wish.\n----------\n")
             # Start the thread and finish Phase B
             thread.start()
     
-    print("\nSERVER: Maximum new-client attempts reached. No new threads will be created.\n\tThe program will stop when all clients are finished.")
+    print("\nSERVER: Maximum new-client timeout reached. No new threads will be created.\n\tThe program will stop if/when all clients are finished.\n")
     # Wait for all threads to complete
     for thread in threads:
         thread.join()
@@ -268,9 +267,6 @@ def next(server, repeat):
 
     tcp_port, codeB = server.listen_udp_data(repeat)
 
-    print('\n------------  End of Phase B  ------------\n')
-
-
     # Phase C - Send client a message via TCP Server
     print('\n------------ Starting Phase C ------------\n')
 
@@ -280,17 +276,12 @@ def next(server, repeat):
     print(f'SERVER: Server ready on the TCP port: {tcp_port}')
 
     connection, clientAddress, repeat, data, codeC, lenC = server.send_tcp_data()
-    
-    print('\n------------  End of Phase C  ------------\n')
-
 
     # Phase D - Receive repeat messages from client via TCP Server
     print('\n------------ Starting Phase D ------------\n')
 
     server.set_code(codeC)
     codeD = server.listen_tcp_data(connection, clientAddress, repeat, lenC)
-
-    print('\n------------  End of Phase D  ------------\n')
 
 
     # Teardown
