@@ -113,7 +113,7 @@ class Client:
                     self.clientSocket.sendto(packet, (self.serverHost, self.serverPort))
                     ack_packet, serverAddress = self.clientSocket.recvfrom(2048)
                     data_len, code, entity, ack_packet_id = struct.unpack("!IHHI", ack_packet[:12])
-                    acknowledged = True # ack_packet_id == i
+                    acknowledged = ack_packet_id == i
                     if acknowledged:
                         print(f'Received acknowledgement packet from server: data_len:  {data_len} pcode:  {code} entity:  {entity} acknumber:  {ack_packet_id}')
                     else:
@@ -129,18 +129,18 @@ class Client:
     # For Phase C - connect to TCP server and receive a packet
     def receive_tcp_data(self):
         # receive packet
-        response_packet, serverAddress = self.clientSocket.recvfrom(2048)
+        response_packet, sefrverAddress = self.clientSocket.recvfrom(2048)
         # unpack and return response from server
         data_len, code, entity = struct.unpack("!IHH", response_packet[:8])
-        repeat, lenC, codeC, ord_char = struct.unpack("!IHHB", response_packet[8:17])
-        char = chr(ord_char)
+        repeat, lenC, codeC = struct.unpack("!III", response_packet[8:20])
+        char = response_packet[20:].decode('utf-8')
         print(f'Received packet from server: data_len: {data_len}  pcode: {code}   entity: {entity}   repeat2: {repeat}   len2: {lenC}   codeC: {codeC}   char:  {char}')
         return repeat, lenC, codeC, char
 
     # For Phase D - send repeat messages to TCP server
     def send_repeat_tcp_data(self, repeat, char, lenC):
         # maintain divisible by 4 rule
-        data = char * (lenC + (4 - lenC % 4))
+        data = char * (lenC + (4 - (lenC % 4) if lenC % 4 > 0 else 0))
         data_len = len(data)
         # generate packet
         header = struct.pack("!IHH", data_len, self.code, Client.entity)
@@ -168,8 +168,6 @@ def main():
     message = "Hello World!!!"
     repeat, udp_port, lenA, codeA = client.send_udp_data(message)
 
-    print('\n------------  End of Phase A  ------------\n')
-
 
     # Phase B - Send repeat messages to new UDP Port
     print('\n------------ Starting Phase B ------------\n')
@@ -182,8 +180,6 @@ def main():
     time.sleep(Client.timeout) # give server time to switch ports
 
     tcp_port, codeB = client.send_repeat_udp_data(repeat, '0' * lenA)
-
-    print('\n------------  End of Phase B  ------------\n')
 
 
     # Phase C - Connect to TCP Server and receive message
@@ -198,8 +194,6 @@ def main():
 
     repeat, lenC, codeC, char = client.receive_tcp_data()
 
-    print('\n------------  End of Phase C  ------------\n')
-
 
     # Phase D - Send repeat messages to TCP Port
     print('\n------------ Starting Phase D ------------\n')
@@ -207,8 +201,8 @@ def main():
     client.set_code(codeC)
 
     codeD = client.send_repeat_tcp_data(repeat, char, lenC)
-
-    print('\n------------  End of Phase D  ------------\n')
+    
+    print()
 
 
     # Teardown
