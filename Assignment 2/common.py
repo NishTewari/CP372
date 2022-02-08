@@ -4,7 +4,7 @@
     ~~~~~~~~~
 
     CP 372 -> Assignment 2
-    Reliable one-way messaging protocol (STP) for an unreliable network.
+    Reliable one-way messaging protocol (RDT) for an unreliable network.
     
     @author Kelvin Kellner (190668940) - https://github.com/kelvinkellner
     @author Nishant Tewari (190684430) - https://github.com/XSilviaX
