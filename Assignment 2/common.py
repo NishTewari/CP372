@@ -1,11 +1,28 @@
+"""
+    ~~~~~~~~~
+    common.py
+    ~~~~~~~~~
+
+    CP 372 -> Assignment 2
+    Reliable one-way messaging protocol (STP) for an unreliable network.
+    
+    @author Kelvin Kellner (190668940) - https://github.com/kelvinkellner
+    @author Nishant Tewari (190684430) - https://github.com/XSilviaX
+    @see https://github.com/XSilviaX/CP372
+    
+    ---------------------------------------------------------------------
+"""
+
 A = 12345
 B = 67890
 TRACE = 1
 MAXDATASIZE = 20;   # This constant controls the maximum size of the buffer in a Message and in a Packet
 
 def checksumCalc(payload):
-    #The implemention of function that calculates checksum goes here
-    return 
+    checksum = 0
+    for point in payload:
+        checksum += ord(point)
+    return checksum
 
 
 class Packet:

@@ -1,9 +1,11 @@
-#from Random import *
+# Imports
 import random 
+import copy
+import sys
 from common import *
 from sender import *
 from receiver import *
-import copy
+
 
 class NetworkSimulator:
     def __init__(self):
@@ -254,6 +256,6 @@ class NetworkSimulator:
     def deliverData(self, entity, dataSent):
         if self.trace >= 1:
             print("B: deliverData: data received at " + str(entity) + ":")
-        #print(dataSent)
+        # print(dataSent)
 
 
