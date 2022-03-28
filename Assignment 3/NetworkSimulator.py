@@ -3,16 +3,17 @@ import random
 from common import *
 from Node import *
 import copy
+import sys
 
 class NetworkSimulator:
     def __init__(self):
         print("Initializing Network Simulator")
 
-        seed = 10 #int(input("Enter random seed: "))
-        trace = 2 #int(input("Enter TRACE: "))        
+        seed = 10 #int(input("Enter random seed: ")) #10
+        trace = 2 #int(input("Enter TRACE: ")) #2
         self.TRACE = trace
         
-        num_nodes = 4 #int(input("Enter number of nodes:"))
+        num_nodes = int(input("Enter number of nodes:")) #4
         
         self.rand = random.seed(seed);        # instantiate Random number generator with provided seed
 
