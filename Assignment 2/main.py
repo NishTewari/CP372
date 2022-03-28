@@ -3,26 +3,26 @@ from common import *
 
 def getSimulatorParameter():
     print("Network Simulator");
-    # nMsgSim = int(input("Enter number of messages to simulate (> 0): "));
-    nMsgSim = 5
+    nMsgSim = int(input("Enter number of messages to simulate (> 0): "));
+    # nMsgSim = 5
     if nMsgSim <= 0 :
         print("Number of Messages must be > 0");
         sys.exit();
  
-    # loss = float(input("Enter the packet loss probability (0.0 for no " + "loss): "))
-    loss = 0.2
+    loss = float(input("Enter the packet loss probability (0.0 for no " + "loss): "))
+    # loss = 0.2
     if ((loss < 0) or (loss > 1)):
         print("packet loss probability must be > 0.0 and < 1.0")
         sys.exit()
 
-    # corrupt = float(input("Enter the packet corruption probability (0.0 " + "for no corruption): "))
-    corrupt = 0.2
+    corrupt = float(input("Enter the packet corruption probability (0.0 " + "for no corruption): "))
+    # corrupt = 0.2
     if ((corrupt < 0) or (corrupt > 1)):
         print("packet corruption probability must be > 0.0 and < 1.0");
         sys.exit();
 
-    # delay = float(input("Enter the average time between messages from the sender's application layer (> 0.0): "))
-    delay = 1000.0
+    delay = float(input("Enter the average time between messages from the sender's application layer (> 0.0): "))
+    # delay = 1000.0
     if (delay < 0):
         print("Number of Messages must be > 0.0")
         sys.exit()

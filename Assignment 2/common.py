@@ -92,7 +92,7 @@ class EventList:
             timerEvent = self.event_list[timerIndex]
             self.event_list.pop(timerIndex)
 
-        return timerEvent;
+        return timerEvent
 
     def getLastPacketTime(self, entityTo):
         time = 0.0
