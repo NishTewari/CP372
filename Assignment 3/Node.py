@@ -17,9 +17,11 @@ class Node:
     def __init__(self, ID, networksimulator, costs):
         self.myID = ID
         self.ns = networksimulator
-        num = self.ns.NUM_NODES        
+        num = self.ns.NUM_NODES
         self.distanceTable = [[0 for _ in range(num)] for _ in range(num)]
+        # initalize routes to index of node if direct path exists (neighbouring), else infinity
         self.routes = [i if costs[i] != self.ns.INFINITY else self.ns.INFINITY for i in range(num)]
+        # intialize connections array to contain index of all directly connected nodes (neighbours)
         self.connections = [i for i in range(num) if costs[i] != self.ns.INFINITY]
 
         # initialize distance table
@@ -27,12 +29,12 @@ class Node:
             for j in range(num):
                 if i == j:
                     self.distanceTable[i][j] = 0
-                elif i == self.myID:
+                elif i == self.myID: 
                     self.distanceTable[i][j] = costs[j]
                 else:
                     self.distanceTable[i][j] = self.ns.INFINITY
                 
-        # send the initial distance table to all neighbors
+        # send the initial distance table to all neighbours
         for j in self.connections:
             if j != ID:
                 pkt = RTPacket(ID, j, costs)
@@ -40,14 +42,13 @@ class Node:
         return
 
     def recvUpdate(self, pkt):
-        # update estimated costs for sender node
-        print(pkt.sourceid, '-->', self.myID, ':', pkt.mincosts)
+        # update estimated costs for source node in self's distance table
         self.distanceTable[pkt.sourceid] = pkt.mincosts
 
-        # calculate shortest path costs for all nodes using Bellman-Ford algorithm
+        # calculate shortest path costs for all nodes from self using Bellman-Ford algorithm
         shortest_path_costs = self.bellman_ford_algorithm(self.myID)
 
-        # if a change is made, update table and send new costs to neighbours
+        # if a change is needed, update table and send new shortest costs to neighbours
         arr_equal = lambda arr1, arr2: all(x == y for x, y in zip(arr1, arr2))
         if not arr_equal(self.distanceTable[self.myID], shortest_path_costs):
             self.distanceTable[self.myID] = shortest_path_costs
@@ -57,7 +58,6 @@ class Node:
                     self.ns.tolayer2(pkt)
         return 
 
-    
     def printdt(self):
         print("   D"+str(self.myID)+" |  ", end="")
         for i in range(self.ns.NUM_NODES):
@@ -74,13 +74,13 @@ class Node:
                 print("{:3d}   ".format(self.distanceTable[i][j]), end="" )
             print()            
         print()
+        return
 
     def bellman_ford_algorithm(self, i):
         '''
         Computes the shortest costs for known paths from a
         single source node to all other nodes in the network
         '''
-        # you implement the rest of it
         shortest_path_costs = []
 
         for j in range(self.ns.NUM_NODES):
@@ -96,4 +96,3 @@ class Node:
                             self.routes[j] = v
                 shortest_path_costs.append(minimum_cost_path)
         return shortest_path_costs
-
