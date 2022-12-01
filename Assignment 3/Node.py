@@ -81,18 +81,17 @@ class Node:
         Computes the shortest costs for known paths from a
         single source node to all other nodes in the network
         '''
-        shortest_path_costs = []
+        shortest_path_costs = [0] * self.ns.NUM_NODES
 
         for j in range(self.ns.NUM_NODES):
             if i == j:
-                shortest_path_costs.append(0)
-            else:
-                minimum_cost_path = self.distanceTable[i][j]
-                for v in range(self.ns.NUM_NODES):
-                    if self.distanceTable[i][v] != self.ns.INFINITY:
-                        transitive_cost = self.distanceTable[i][v] + self.distanceTable[v][j]
-                        if transitive_cost < minimum_cost_path:
-                            minimum_cost_path = transitive_cost
-                            self.routes[j] = v
-                shortest_path_costs.append(minimum_cost_path)
+                pass
+            minimum_cost_path = self.distanceTable[i][j]
+            for v in range(self.ns.NUM_NODES):
+                if self.distanceTable[i][v] != self.ns.INFINITY:
+                    transitive_cost = self.distanceTable[i][v] + self.distanceTable[v][j]
+                    if transitive_cost < minimum_cost_path:
+                        minimum_cost_path = transitive_cost
+                        self.routes[j] = v
+            shortest_path_costs[j] = minimum_cost_path
         return shortest_path_costs
